@@ -1,0 +1,138 @@
+syntax = "proto3";
+package devctl;
+option go_package = "github.com/jamesryancoleman/bos/services/device";
+
+// import "google/protobuf/empty.proto";
+
+message Header {
+    string Src = 1;
+    string Dst = 2;
+}
+
+message GetRequest {
+    Header Header = 1; 
+    string Key = 2;
+}
+
+message GetResponse {
+    optional Header Header = 1;
+    string Key = 2;
+    string Value = 3;
+    optional Dtype Dtype = 4;
+    optional GetError Error = 5;
+    optional string ErrorMsg = 6;
+}
+
+message SetRequest {
+    optional Header Header = 1;
+    string Key = 2;
+    string Value = 3;
+}
+
+message SetResponse {
+    optional Header Header = 1;
+    bool Ok = 2;
+    optional string Key = 3;
+    optional string Value = 4;
+    optional SetError Error = 5; 
+    optional string ErrorMsg = 6;
+}
+
+message GetMultipleRequest {
+    Header Header = 1;
+    repeated string Keys = 2;
+}
+
+message GetMultipleResponse {
+    Header Header = 1;
+    repeated GetResponse Responses = 2;
+}
+
+message SetMultipleRequest {
+    Header Header = 1;
+    repeated SetRequest Requests = 2;
+}
+
+message SetMultipleResponse {
+    Header Header = 1;
+    repeated SetResponse Responses = 2;
+}
+
+            
+// the GetSetRun service provides the fundamental driver functionality for Setting 
+// values, getting them, and running commands.
+service GetSetRun {
+    // rpc for getting a value from a driver
+    rpc Get(GetRequest) returns (GetResponse);
+    
+    // rpc for getting multiple values from a driver
+    rpc GetMultiple(GetMultipleRequest) returns (GetMultipleResponse);
+    
+    // rpc for setting a value on a driver
+    rpc Set(SetRequest) returns (SetResponse);
+
+    // rpc for setting multiple response
+    rpc SetMultiple(SetMultipleRequest) returns (SetMultipleResponse);
+}
+                   
+enum GetError {
+    GET_ERROR_NONE = 0;
+    GET_ERROR_UNSPECIFIED = 1;
+    GET_ERROR_KEY_DOES_NOT_EXIST = 2;
+    GET_ERROR_TIMEOUT = 3;
+    GET_ERROR_COULD_NOT_RESOLVE_DRIVER = 4;
+    GET_ERROR_ACCESS_DENIED = 5;
+}
+
+enum SetError {
+    SET_ERROR_NONE = 0;
+    SET_ERROR_UNSPECIFIED = 1;
+    SET_ERROR_KEY_DOES_NOT_EXIST = 2;
+    SET_ERROR_TIMEOUT = 3;
+    SET_ERROR_COULD_NOT_RESOLVE_DRIVER = 4;
+    SET_ERROR_ACCESS_DENIED = 5;
+    SET_ERROR_READ_ONLY = 6;
+    SET_ERROR_INVALID_VALUE_TYPE = 7;
+}
+                
+                        
+enum Dtype {
+    DOUBLE = 0; // float64
+    FLOAT = 1;  // float32
+    INT32 = 2;  // int32
+    INT64 = 3;  // int64
+    UINT32 = 4;
+    UINT64 = 5;
+    SINT32 = 6;
+    SINT64 = 7;
+    FIXED32 = 8;
+    FIXED64 = 9;
+    SFIXED32 = 10;
+    SFIXED64 = 11;
+    BOOL = 12;
+    STRING = 13;
+    BYTES = 14;
+}
+                        
+/* 
+
+For python compiling:
+
+python -m grpc_tools.protoc  -I=. \
+--python_out=.      \
+--pyi_out=.         \
+--grpc_python_out=. \
+device.proto
+
+For Go compiling:
+
+protoc -I=. \
+--go_out=. --go_opt=paths=source_relative \
+--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+./device.proto &&
+protoc --proto_path=. \
+--go_out=. --go_opt=paths=source_relative \
+--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+./device.proto
+
+*/
