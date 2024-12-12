@@ -245,6 +245,8 @@ async def WriteProperty(device_address:str, object_identifier:str, property_id:s
         if app:
             app.close()
 
+
+# the gRPC server implementation
 class BACnetRPCServer(device_pb2_grpc.GetSetRunServicer):
     def Get(self, request:device_pb2.GetRequest, context):
         print("received Get request: ", request)
