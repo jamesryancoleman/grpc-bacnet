@@ -1,0 +1,63 @@
+[
+    {
+        "name": "bacpi",
+        "device": 123,
+        "address": "192.168.1.197",
+        "objects": {
+            "analog-value,1" : {
+                "object_id": "",
+                "property": "present-value"
+            }
+        }
+    }, 
+    {
+        "name": "kaiterra",
+        "device": 9,
+        "address": "192.168.1.177",
+        "objects": {
+            "device,9" : {
+                "description": "Smart Air Quality Monitor"
+            },
+            "analog-input,1" : {
+                "property": "present-value",
+                "description": "PM2.5",
+                "units": "micrograms-per-cubic-meter"
+            },
+            "analog-input,2": {
+                "property": "present-value",
+                "description": "PM10",
+                "units": "micrograms-per-cubic-meter"
+            },
+            "analog-input,3": {
+                "property": "present-value",
+                "description": "TVOC",
+                "units": "parts-per-billion"
+            },
+            "analog-input,4": {
+                "property": "present-value",
+                "description": "Temperature",
+                "units": "degrees-celsius"
+            },
+            "analog-input,5": {
+                "property": "present-value",
+                "description": "Humidity",
+                "units": "percent"
+            },
+            "analog-input,6": {
+                "description": "CO2",
+                "property": "present-value",
+                "units": "parts-per-million"
+            },
+            "analog-input,8": {
+                "description": "KM200 Module Lifespan",
+                "property": "present-value",
+                "units": "percent"
+            },
+            "analog-input,9": {
+                "description": "KM203 Module Lifespan",
+                "property": "present-value",
+                "units": "percent"
+            }
+        }
+    }
+]

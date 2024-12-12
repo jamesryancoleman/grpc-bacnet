@@ -24,8 +24,7 @@ from bacpypes3.json.util import (
 from concurrent import futures
 import datetime as dt
 import logging
-
-import sparql # from this module
+import sys
 
 from argparse import Namespace
 import parse
@@ -52,7 +51,10 @@ INSTANCE_LOW = 0
 INSTANCE_HIGH = 4194302 # 4194303
 
 # MUST CHANGE THIS
-server_address = '192.168.13.128/24'
+SERVER_ADDRESS:str  # e.g., 192.168.1.1
+MASK:str = "24"
+
+SERVER_PORT:str = "50062"     # e.g., 50062
 
 args = Namespace(
     loggers=False,
@@ -62,7 +64,7 @@ args = Namespace(
     name='BACpi',
     instance=INSTANCE_SERVER,
     network=0,
-    address=server_address, # set this to the machines IP.
+    address="192.168.1.167/24", # set this to the machines IP.
     vendoridentifier=999,
     foreign=None,
     ttl=30,
@@ -96,8 +98,7 @@ async def StashMultiple(X:dict[str,Any]|list[str],
     return 
     
 
-# utility function for stashing the results of multiple calls to a function in 
-# an iterable.
+# utility function for stashing the results of multiple calls to a function in an iterable.
 async def StashResult(X:dict[str,any]|list[str], 
                       func:Callable,
                       *args,
@@ -115,6 +116,7 @@ async def StashResult(X:dict[str,any]|list[str],
 async def ReadProperty(device_addr:str, object_id:str, property_id:str) -> str:
     # global app
     app = None # clear the app out
+    args
     try: 
         if _debug:
             _log.debug("args: %r", args)
@@ -133,7 +135,7 @@ async def ReadProperty(device_addr:str, object_id:str, property_id:str) -> str:
             _log.debug("device_address: %r", device_address)
         
         # interpret the object identifier
-        print("DEBUG: object id:",object_id)
+        # print("DEBUG: object id:",object_id)
         object_identifier = ObjectIdentifier(object_id)
         if _debug:
             _log.debug("object_identifier: %r", object_identifier)
@@ -231,7 +233,7 @@ async def WriteProperty(device_address:str, object_identifier:str, property_id:s
             )
             if _debug:
                 _log.debug("response: %r", response)
-            print(response)
+            # print(response)
             if response is None:
                 return True
         except ErrorRejectAbortNack as err:
@@ -319,7 +321,7 @@ class BACnetRPCServer(device_pb2_grpc.GetSetRunServicer):
                                   
 
 # need to use specified port in the oxigraph instance
-async def serve(port:str="50062") -> None:
+async def serve(port:str=SERVER_PORT) -> None:
     # GRPC set up
     server = grpc.aio.server()
     device_pb2_grpc.add_GetSetRunServicer_to_server(BACnetRPCServer(), server)
@@ -339,14 +341,37 @@ async def serve(port:str="50062") -> None:
 _cleanup_coroutines = []
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    # loop = asyncio.get_event_loop()
-    loop = asyncio.new_event_loop()
+    if len(sys.argv) > 2:
+        SERVER_ADDRESS = "{}/{}".format(sys.argv[1], MASK)
+        SERVER_PORT = sys.argv[2]
 
+        args = Namespace(
+            loggers=False,
+            debug="__main__",
+            color=True,
+            route_aware=None,
+            name='BACpi',
+            instance=INSTANCE_SERVER,
+            network=0,
+            address=SERVER_ADDRESS, # set this to the machines IP.
+            vendoridentifier=999,
+            foreign=None,
+            ttl=30,
+            bbmd=None,
+        )
 
-    try:
-        loop.run_until_complete(serve())
-    finally:
-        loop.run_until_complete(*_cleanup_coroutines)
-        loop.close()
+        logging.basicConfig(level=logging.INFO)
+        # loop = asyncio.get_event_loop()
+        loop = asyncio.new_event_loop()
 
+        try:
+            loop.run_until_complete(serve())
+        finally:
+            loop.run_until_complete(*_cleanup_coroutines)
+            loop.close()
+    else:
+        print("bacnet server requires 2 args: [listen-address] [port]")
+        if len(sys.argv) == 2:
+            SERVER_ADDRESS = "{}/{}".format(sys.argv[1], MASK)
+            print("\t1 arg received listen-address={}".format(SERVER_ADDRESS))
+        sys.exit(1)
