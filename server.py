@@ -328,11 +328,10 @@ async def serve(port:str=SERVER_PORT) -> None:
     server.add_insecure_port("[::]:" + port)
     logging.info("Server started. Listening on port: %s", port)
     await server.start()
-    # server.wait_for_termination()
 
     async def server_graceful_shutdown():
         logging.info("Starting graceful shutdown")
-        await server.stop(5)
+        await server.stop(3)
     
     _cleanup_coroutines.append(server_graceful_shutdown())
     await server.wait_for_termination()
@@ -370,8 +369,8 @@ if __name__ == "__main__":
             loop.run_until_complete(*_cleanup_coroutines)
             loop.close()
     else:
-        print("bacnet server requires 2 args: [listen-address] [port]")
+        print("bacnet server requires 2 args: LISTEN_ADDR PORT")
         if len(sys.argv) == 2:
             SERVER_ADDRESS = "{}/{}".format(sys.argv[1], MASK)
-            print("\t1 arg received listen-address={}".format(SERVER_ADDRESS))
+            print("\t1 arg received LISTEN_ADDR={}".format(SERVER_ADDRESS))
         sys.exit(1)

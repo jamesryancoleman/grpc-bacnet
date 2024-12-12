@@ -62,15 +62,3 @@ def GetMultiple(keys:list[str], addr=devCtrlAddr) -> list[device_pb2.GetResponse
         ))
     
     return result.Responses
-
-
-
-# if __name__=="__main__":
-#     # key1 = "2.1"
-#     # get_test(key1)
-
-#     # key2 = "2.2"
-#     # get_multiple_test([key1,key2])
-
-#     key3 = ""
-    

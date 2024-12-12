@@ -1,20 +1,12 @@
 import re
 
-addr_re = re.compile(r'[0-9A-Za-z.]+(?!://)(?=[/:\b])?') # finds the host and port so use [0]
-port_re = re.compile(r'(?<=:)[0-9]+(?=/)?')
-
-# bacnet_re = re.compile(r"^bacnet(?=://)")
-device_re = re.compile(r'(?<=bacnet://)[0-9A-Za-z.]+(?!://)(?=/:)?') # finds the host and port so use [0]
-obj_id_re = re.compile(r'[a-zA-Z-_]+,[0-9]+?')
-property_re = re.compile(r'(?<=[0-9]/)[a-zA-Z0-9-_]+(?=[\?/]|$)')
-index_re = re.compile(r'(?<=/)[0-9](?=[\?/]|$)')
-query_re = re.compile(r'(?<=[&\?])[A-Za-z0-9\_\-\.\=]+')
-
 # these are the only two needed
 bacnet_re = re.compile(r'^(?P<schema>[a-z]+)://(?P<host>[a-zA-Z0-9.-]+):?(?P<port>[0-9]+)?/(?P<device>[0-9]+)/?(?P<obj_type>[a-zA-Z-_]+)?,?(?P<obj_inst>[0-9]+)?/?(?P<prop>[a-zA-Z0-9-_]+)?/?(?P<index>[0-9]+)?\??(?P<query_params>[^\?]+)?')
 params_re = re.compile(r'[a-zA-Z0-9-_]+=?[0-9\.]+?(?=&|\b)')
 
-class BACnetPtParams():
+addr_re = re.compile(r'(?P<host>[a-zA-Z0-9.-]+):?(?P<port>[0-9]+)?')
+
+class BACnetPtParams(object):
     def __init__(self) -> None:
         self.is_valid = False
         self.host = ""              # 192.168.1.99  
@@ -70,9 +62,6 @@ class BACnetPtParams():
                                       )
 
 
-
-
-
 def ParseBacnetPtKey(uri:str) -> BACnetPtParams:
     """ParseBacnetPtKey takes a uri key of the format 
     `bacnet://<host>[:port]/<dev>/<object_type>,<object_inst>/<property>[/<index>]`
@@ -94,163 +83,21 @@ def ParseBacnetPtKey(uri:str) -> BACnetPtParams:
 
     return params
 
-# Depricated no not use
-def ParseBACnetUri(uri:str) -> BACnetPtParams:
-    """ParseBACnetUrl takes a url string and returns a dict with the keys:
-    "valid" (bool), "host" (string), port (int), path (list)."""
-    params = BACnetPtParams()
 
-    if len(bacnet_re.findall(uri)) == 0:
-        # user id not provide schema
-        return None
-    
-    # get the host address
-    _dev = device_re.findall(uri)
-    if len(_dev) > 0:
-        params.host = _dev[0]
-
-    # look for a port
-    _port = port_re.findall(uri)
-    if len(_port) > 0:
-        params.port = int(_port[0])
-
-    # grab the object identifier
-    _obj_id = obj_id_re.findall(uri)
-    if len(_obj_id) > 0:
-        params.object_identifier = _obj_id[0]
-
-        # split up the object type and the object instance
-        id_parts = _obj_id[0].split(",")
-        params.object_type = id_parts[0]
-        params.object_instance = id_parts[1]
-
-    # grab the property
-    _property = property_re.findall(uri)
-    if len(_property) > 0:
-        params.property =  _property[0]
-
-    # grab the index, if provided
-    _index = index_re.findall(uri)
-    if len(_index) > 0:
-        try:
-            params.index = int(_index[0])
-        except ValueError:
-            # let params.index remain None
-            pass
-
-    # parse the query params
-    args = query_re.findall(uri)
-    for a in args:
-        parts = a.split("=")
-        if len(parts) > 1:
-            # we have a kwarg
-            if parts[0]=="value":
-                params.value=parts[1]
-            elif parts[0]=="priority":
-                params.priority=int(parts[1])
-            else:
-                # we have a kwargs
-                params.kwargs[parts[0]] = parts[1]
-        else:
-            # we have a flag
-            params.flags.append(a)
-
-    # format the address
-    params.Tidy()
-    
-    return params
-
-
-def ParseAddress(address:str) -> dict:
-    socket = {
-        "host": None,
-        "port": None,
-        }
-
-    host = addr_re.findall(address)
-    if len(address) > 0:
-        socket["host"] = host[0]
-    else:
-        socket["host"] = None
-
-    port = port_re.findall(address)
-    if len(port) > 0:
-        socket["port"] = port[0]
-    else:
-        socket["port"] = None
-
-    return socket
-
-
-bos_point_re = re.compile(r'(?P<schema>[a-z]+)://(?P<host>[a-zA-Z0-9.-]+):?(?P<port>[0-9]+)?/bos/dev/(?P<device>[0-9]+)/pts/(?P<point>[0-9]+)')
-
-def ParseBosPoint(uri:str) -> str:
-    bpm = bos_point_re.match(uri)
-    g = bpm.groupdict()
-
-    return g['device'] + "." + g['point']
-
+def ParseAddress(addr:str) -> dict:
+    matches = bacnet_re.match(addr)
+    return matches.groupdict()
 
 if __name__ == "__main__":
     import sys
 
+    if len(sys.argv) > 1:
+        pass
+    else:
+        bacnet_uris = [
+        "bacnet://192.168.1.23:47808/123/analog-value,19/present-value",
+        "bacnet://node6/123/analog-input,19/present-value"]
 
-    # uri_tests = [
-    #     # just a device
-    #     "bacnet://123/device,321",
-    #     # complete point
-    #     "bacnet://123:47809/analog-value,1/present-value",
-    #     # point with index
-    #     "bacnet://123/analog-value,1/present-value/3",
-    #     # point with value and priority
-    #     "bacnet://123/analog-value,1/present-value?value=100.0&priority=9",
-    #     # point with index and value
-    #     "bacnet://123/analog-value,1/present-value?value=100.0&priority=9",
-    #     # point with index, value, and priorty
-    #     "bacnet://123:47808/analog-value,1/present-value/3?value=100.0&priority=9",
-    # ]
-
-    # socket_tests = [
-    #     "192.168.1.123",            # 47808 is implied
-    #     "192.168.1.321:47809",      # 47809 is explicit
-    #     "node6:47808",              # 47808 is explicit
-    #     "node6/path/to/resource",   # root path is explicity
-    #     "192.168.1.23:47809/resouce?flag",      # port and root path is explicit
-    # ]
-
-    combined_uri_tests = [
-        # a write point
-        "bacnet://192.168.1.23:47808/123/analog-value,19/present-value/4?value=69.0&priority=9",
-        # a read request
-        "bacnet://node6/123/analog-value,19/present-value"
-    ]
-
-    res = ParseBosPoint("bos://localhost/bos/dev/2/pts/15")
-    print(res)
-
-
-    # # compile the regexps
-    # for i, t in enumerate(combined_uri_tests):
-    #     km = key_re.match(t)
-    #     groups = km.groupdict()
-    #     print(i+1, groups)
-
-    #     p_dict = {}
-    #     if "query_params" in groups:
-    #         query_str = groups["query_params"]
-    #         if query_str != "":
-    #             # TODO debug why this breaks when there are no query params
-    #             params = params_re.findall(query_str)
-    #             for p in params:
-    #                 if "=" in p:
-    #                     # key value pair
-    #                     parts = p.split("=")
-    #                     p_dict[parts[0]] = parts[1]
-    #                 else:
-    #                     # flag
-    #                     p_dict[parts[0]] = True
-    #         print("write params:", p_dict)
-    #     else:
-    #         print("read-only")
-
-
+        for uri in bacnet_uris:
+            params = ParseBacnetPtKey(uri)
+            print(params.__dict__)
