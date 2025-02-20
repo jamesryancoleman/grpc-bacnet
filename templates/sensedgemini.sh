@@ -1,7 +1,7 @@
 # create the device
-DEVICE_ID=$(mkd -n home_iaq -t brick:IAQ_Sensor_Equipment -l SouthSt)
+DEVICE_ID=$(mkd -n home_iaq -t brick:IAQ_Sensor_Equipment -l lab)
 add -driver 2 $DEVICE_ID
-# add -driver.name bacnet $DEVICE_ID
+# add -driver.name bacnet -addr localhost:50062 $DEVICE_ID
 echo "created dev:$DEVICE_ID"
 
 DEVICE_IP="192.168.1.177" # must be provided by user

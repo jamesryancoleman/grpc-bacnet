@@ -248,43 +248,23 @@ async def WriteProperty(device_address:str, object_identifier:str, property_id:s
 
 # the gRPC server implementation
 class BACnetRPCServer(comms_pb2_grpc.GetSetRunServicer):
+    # def Get(self, request:comms_pb2.GetRequest, context):
+    #     print("received Get request: ", request)
+    #     header = comms_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
+        
+    #     # parses the uri into bacnet READ arguments
+    #     params = parse.ParseBacnetPtKey(request.Key)
+
+    #     # fetch value over network 
+    #     value = asyncio.run(ReadProperty(params.address, params.GetObjectId(), params.property))
+
+    #     return comms_pb2.GetResponse(
+    #         Header=header,
+    #         Key=request.Key,
+    #         Value=str(value)
+    #     )
+
     def Get(self, request:comms_pb2.GetRequest, context):
-        print("received Get request: ", request)
-        header = comms_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
-        
-        # parses the uri into bacnet READ arguments
-        params = parse.ParseBacnetPtKey(request.Key)
-
-        # fetch value over network 
-        value = asyncio.run(ReadProperty(params.address, params.GetObjectId(), params.property))
-
-        return comms_pb2.GetResponse(
-            Header=header,
-            Key=request.Key,
-            Value=str(value)
-        )
-    
-    def Set(self, request:comms_pb2.SetRequest, context) -> comms_pb2.SetResponse:
-        print("set request received: ", request)
-        header = comms_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
-
-        params = parse.ParseBacnetPtKey(request.Key)
-
-        ok = asyncio.run(WriteProperty(params.address,
-                                          params.GetObjectId(),
-                                          params.property,
-                                          request.Value))
-        
-        print("resp: ", ok)
-        return comms_pb2.SetResponse(
-            Header=header,
-            Ok=ok,
-            Key=request.Key,
-            Value=request.Value,
-        )
-
-
-    def GetMultiple(self, request:comms_pb2.GetMultipleRequest, context):
         print("received GetMultiple request: ", request)
         header = comms_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
         
@@ -310,16 +290,38 @@ class BACnetRPCServer(comms_pb2_grpc.GetSetRunServicer):
         ))
         
         # copy results to the response format
-        results = []
+        results:list[comms_pb2.GetPair] = []
         for k, v in unordered_results.items():
-            results.append(comms_pb2.GetResponse(
+            results.append(comms_pb2.GetPair(
                 Key=k,
-                Value=str(v)
+                Value=str(v),
+                # TODO Dtype=[something] ,
             ))
-        return comms_pb2.GetMultipleResponse(
+        return comms_pb2.GetResponse(
             Header=header,
-            Responses=results,
+            Pairs=results,
         )
+    
+    def Set(self, request:comms_pb2.SetRequest, context) -> comms_pb2.SetResponse:
+        print("set request received: ", request)
+        header = comms_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
+
+        results:list[comms_pb2.SetPair] = []
+        for pair in request.Pairs:
+            params = parse.ParseBacnetPtKey(pair.Key)
+            ok = asyncio.run(WriteProperty(params.address,
+                                                params.GetObjectId(),
+                                                params.property,
+                                                pair.Value))
+            if ok:
+                pair.Ok = True
+            results.append(pair)
+            print("{} <- {} (ok={})".format(pair.Key, pair.Value, pair.Ok)) 
+
+        return comms_pb2.SetResponse(
+            Header=header,
+            Pairs=results,
+        )   
                                   
 
 # need to use specified port in the oxigraph instance
