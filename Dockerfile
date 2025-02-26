@@ -10,4 +10,4 @@ WORKDIR /opt/bos/device/drivers/bacnet
 
 COPY . /opt/bos/device/drivers/bacnet/
 
-CMD ["python", "server.py"]
+CMD ["python", "server.py", "--debug"]

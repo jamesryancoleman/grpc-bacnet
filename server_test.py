@@ -33,8 +33,9 @@ def TestCaseToUri(case:dict, object_id:str) -> str:
     uri = URL_FMT.format(case['address'], case['device'], object_id, case['objects'][object_id]['property'])
     return uri
 
-def ReadTest(url:str):
+def ServerReadTest(url:str):
     params = parse.ParseBacnetPtKey(url)
+    # print(params.__dict__)
     r = asyncio.run(server.ReadProperty(params.address,
                                         params.GetObjectId(),
                                         params.property))
@@ -151,21 +152,22 @@ def list_stash_test() -> dict[str, any]:
     return ordered_results
 
 if __name__ == "__main__":
-    C = LoadTestCases(DEFAULT_PATH)    
-    uri1 = TestCaseToUri(C[0], "analog-value,1")
-    uri2 = TestCaseToUri(C[1], "analog-input,4")
-    uri3 = TestCaseToUri(C[1], "analog-input,5")
-    uri4 = TestCaseToUri(C[1], "analog-input,6")
+    # C = LoadTestCases(DEFAULT_PATH)    
+    # uri1 = TestCaseToUri(C[0], "analog-value,1")
+    # uri2 = TestCaseToUri(C[1], "analog-input,4")
+    # uri3 = TestCaseToUri(C[1], "analog-input,5")
+    # uri4 = TestCaseToUri(C[1], "analog-input,6")
 
     print("== get test ==")
-    ReadTest(uri1)
+    ServerReadTest("bacnet://192.168.13.147/40100/analog-input,12/present-value")
+    # ReadTest(uri1)
 
-    print("== get multiple ==")
-    ReadMultipleTest([uri2, uri3, uri4])
+    # print("== get multiple ==")
+    # ReadMultipleTest([uri2, uri3, uri4])
 
-    print("== set test ==")
-    WriteTest(uri1, "82.25")
-    ReadTest(uri1)
+    # print("== set test ==")
+    # WriteTest(uri1, "82.25")
+    # ReadTest(uri1)
 
-    print("== set multiple ==")
-    WriteMultipleTest([(uri1, "82.25"), (uri1, "85.0"), (uri1, "87.5")])
+    # print("== set multiple ==")
+    # WriteMultipleTest([(uri1, "82.25"), (uri1, "85.0"), (uri1, "87.5")])

@@ -36,15 +36,16 @@ import comms_pb2_grpc
 from typing import Callable, Any
 
 # some debugging
-_debug = 1
+_debug = 0
 _log = ModuleLogger(globals())
 _log.setLevel(logging.DEBUG)
+# _log.setLevel(logging.INFO)
 
 # 'property[index]' matching
 property_index_re = re.compile(r"^([0-9A-Za-z-]+)(?:\[([0-9]+)\])?$")
 
 # globals
-app: Application = None
+# app: Application = None
 
 INSTANCE_SERVER = 999
 INSTANCE_LOW = 0
@@ -57,14 +58,13 @@ MASK:str = "24"
 SERVER_PORT:str = "50062"     # e.g., 50062
 
 args = Namespace(
-    loggers=False,
-    debug="__main__",
-    color=True,
+    # loggers=False,
+    # debug= "__main__",
     route_aware=None,
     name='BACpi',
     instance=INSTANCE_SERVER,
     network=0,
-    address="192.168.1.167/24", # set this to the machines IP.
+    # address="192.168.1.127/24", # set this to the machines IP.
     vendoridentifier=999,
     foreign=None,
     ttl=30,
@@ -114,28 +114,23 @@ async def StashResult(X:dict[str,any]|list[str],
 
 
 async def ReadProperty(device_addr:str, object_id:str, property_id:str) -> str:
-    # global app
     app = None # clear the app out
-    args
-    try: 
-        if _debug:
-            _log.debug("args: %r", args)
+    try:
         if app is None:
             # build an application
             app = Application.from_args(args)
-
-            parse = SimpleArgumentParser()
-            parse.expand_args(args) # this should set debugging to True and add color
         if _debug:
-            _log.debug("app: %r", app)
-
+            _log.debug("app: %r", app) 
+        
+        if _debug:
+            _log.debug("debug: %r", _debug) 
+        
         # interpret the address
         device_address = Address(device_addr)
         if _debug:
             _log.debug("device_address: %r", device_address)
         
         # interpret the object identifier
-        # print("DEBUG: object id:",object_id)
         object_identifier = ObjectIdentifier(object_id)
         if _debug:
             _log.debug("object_identifier: %r", object_identifier)
@@ -152,6 +147,8 @@ async def ReadProperty(device_addr:str, object_id:str, property_id:str) -> str:
 
 
         try:
+            # print("Trying to get response:")
+            # print(device_address,object_identifier, property_identifier, property_array_index)
             response = await app.read_property(
                 device_address,
                 object_identifier,
@@ -169,7 +166,6 @@ async def ReadProperty(device_addr:str, object_id:str, property_id:str) -> str:
             if _debug:
                 _log.debug("    - schedule objects")
             response = response.get_value()
-
         # print(str(response))
     
     finally:
@@ -192,8 +188,8 @@ async def WriteProperty(device_address:str, object_identifier:str, property_id:s
             # build an application
             app = Application.from_args(args)
 
-            parse = SimpleArgumentParser()
-            parse.expand_args(args) # this should set debugging to True and add color
+            # parse = SimpleArgumentParser()
+            # parse.expand_args(args) # this should set debugging to True and add color
 
         # interpret the address
         device_address = Address(device_address)
@@ -248,24 +244,13 @@ async def WriteProperty(device_address:str, object_identifier:str, property_id:s
 
 # the gRPC server implementation
 class BACnetRPCServer(comms_pb2_grpc.GetSetRunServicer):
-    # def Get(self, request:comms_pb2.GetRequest, context):
-    #     print("received Get request: ", request)
-    #     header = comms_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
-        
-    #     # parses the uri into bacnet READ arguments
-    #     params = parse.ParseBacnetPtKey(request.Key)
-
-    #     # fetch value over network 
-    #     value = asyncio.run(ReadProperty(params.address, params.GetObjectId(), params.property))
-
-    #     return comms_pb2.GetResponse(
-    #         Header=header,
-    #         Key=request.Key,
-    #         Value=str(value)
-    #     )
-
     def Get(self, request:comms_pb2.GetRequest, context):
-        print("received GetMultiple request: ", request)
+        # print("globals:")
+        # for k, v in globals().items():
+        #     print(k,": ", v, sep="")
+        if _debug:
+            _log.debug("get_request:\n%r", request)
+        # print("received Get request:\n", request, sep="")
         header = comms_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
         
         # fetch the (id, BacnetPtParams) tuples from the sysmod service
@@ -326,15 +311,35 @@ class BACnetRPCServer(comms_pb2_grpc.GetSetRunServicer):
 
 # need to use specified port in the oxigraph instance
 async def serve(port:str=SERVER_PORT) -> None:
+    # parse reused app arguments
+    global args
+    # _log
+
+    parser = SimpleArgumentParser()
+    args = parser.parse_args()
+    args.address = '192.168.13.127/24'
+    # print(vars(_log))
+    # _log.basicConfig(level=logging.INFO)
+    # Remove all existing handlers
+#     for handler in logging.root.handlers[:]:
+#         logging.root.removeHandler(handler)
+
+#     # Set up your logging configuration
+#     logging.basicConfig(
+#         level=logging.INFO,
+#         # format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# )
+
     # GRPC set up
     server = grpc.aio.server()
     comms_pb2_grpc.add_GetSetRunServicer_to_server(BACnetRPCServer(), server)
-    server.add_insecure_port("[::]:" + port)
-    logging.info("Server started. Listening on port: %s", port)
+    result = server.add_insecure_port("0.0.0.0:" + port)
+    print(result)
+    _log.info("gRPC server started. Listening on port: %s", port)
     await server.start()
 
     async def server_graceful_shutdown():
-        logging.info("Starting graceful shutdown")
+        _log.info("Starting graceful shutdown")
         await server.stop(3)
     
     _cleanup_coroutines.append(server_graceful_shutdown())
@@ -344,37 +349,38 @@ async def serve(port:str=SERVER_PORT) -> None:
 _cleanup_coroutines = []
 
 if __name__ == "__main__":
-    if len(sys.argv) > 2:
-        SERVER_ADDRESS = "{}/{}".format(sys.argv[1], MASK)
-        SERVER_PORT = sys.argv[2]
+    # if len(sys.argv) > 2:
+    # print(sys.argv)
+    # SERVER_ADDRESS = "{}/{}".format(sys.argv[1], MASK)
+    # SERVER_PORT = SER
 
-        args = Namespace(
-            loggers=False,
-            debug="__main__",
-            color=True,
-            route_aware=None,
-            name='BACpi',
-            instance=INSTANCE_SERVER,
-            network=0,
-            address=SERVER_ADDRESS, # set this to the machines IP.
-            vendoridentifier=999,
-            foreign=None,
-            ttl=30,
-            bbmd=None,
-        )
+    # args = Namespace(
+    #     # loggers=False,
+    #     debug=0,
+    #     color=True,
+    #     route_aware=None,
+    #     name='BACpi',
+    #     instance=INSTANCE_SERVER,
+    #     network=0,
+    #     # address="", # set this to the machines IP. default is "" (empty str)
+    #     vendoridentifier=999,
+    #     foreign=None,
+    #     ttl=30,
+    #     bbmd=None,
+    # )
 
-        logging.basicConfig(level=logging.INFO)
-        # loop = asyncio.get_event_loop()
-        loop = asyncio.new_event_loop()
+    # logging.basicConfig(level=logging.INFO)
+    # loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
 
-        try:
-            loop.run_until_complete(serve())
-        finally:
-            loop.run_until_complete(*_cleanup_coroutines)
-            loop.close()
-    else:
-        print("bacnet server requires 2 args: LISTEN_ADDR PORT")
-        if len(sys.argv) == 2:
-            SERVER_ADDRESS = "{}/{}".format(sys.argv[1], MASK)
-            print("\t1 arg received LISTEN_ADDR={}".format(SERVER_ADDRESS))
-        sys.exit(1)
+    try:
+        loop.run_until_complete(serve())
+    finally:
+        loop.run_until_complete(*_cleanup_coroutines)
+        loop.close()
+    # else:
+    #     print("bacnet server requires 2 args: LISTEN_ADDR PORT")
+    #     if len(sys.argv) == 2:
+    #         SERVER_ADDRESS = "{}/{}".format(sys.argv[1], MASK)
+    #         print("\t1 arg received LISTEN_ADDR={}".format(SERVER_ADDRESS))
+    #     sys.exit(1)
