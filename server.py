@@ -334,7 +334,7 @@ async def serve(port:str=SERVER_PORT) -> None:
     server = grpc.aio.server()
     comms_pb2_grpc.add_GetSetRunServicer_to_server(BACnetRPCServer(), server)
     result = server.add_insecure_port("0.0.0.0:" + port)
-    print(result)
+    # print(result)
     _log.info("gRPC server started. Listening on port: %s", port)
     await server.start()
 
