@@ -3,6 +3,8 @@ FROM python:3.13.1-slim-bookworm
 RUN python -m pip install grpcio-tools
 RUN python -m pip install grpcio
 
+ENV TZ="America/New_York"
+
 RUN python -m pip install bacpypes3
 
 RUN mkdir -p /opt/bos/device/drivers/bacnet

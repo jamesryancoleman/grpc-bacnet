@@ -1,0 +1,484 @@
+syntax = "proto3";
+package bos;
+
+// option sysmod_package = "github.com/jamesryancoleman/bos/services/sysmod";
+// option go_package = "github.com/jamesryancoleman/bos/services/device";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+// import "google/protobuf/empty.proto";
+
+message Empty{} 
+
+// Headers are used to track from what service or app a request is made and 
+// from which service a response is returned.
+message Header {
+    string Src = 1;
+    string Dst = 2;
+
+    uint64 TxnId = 3;
+    string SessionToken = 4;
+
+    google.protobuf.Timestamp Time = 5;
+}
+
+// GetPairs are returned by services when get requests are made
+message GetPair {
+    string Key = 1;
+    string Value = 2;
+    optional Dtype Dtype = 3;
+    optional google.protobuf.Timestamp time = 4;
+
+    optional GetError Error = 5; // is this the right error type?
+    optional string ErrorMsg = 6;
+}
+
+// SetPairs are returned by services when set requests are made
+message SetPair {
+    // used in requests
+    string Key = 1;
+    string Value = 2;
+
+    // used in responses
+    optional Dtype Dtype = 3;
+    
+    bool Ok = 4;
+
+    optional SetError Error = 5; // is this the right error type?
+    optional string ErrorMsg = 6;
+}
+
+message GetRequest {
+    Header Header = 1; 
+    repeated string Keys = 2;
+}
+
+message GetResponse {
+    optional Header Header = 1;
+    repeated GetPair Pairs = 2;
+
+    optional ServiceError Error = 3;
+    optional string ErrorMsg = 4;
+}
+
+message SetRequest {
+    optional Header Header = 1;
+    repeated SetPair Pairs = 2;
+}
+
+message SetResponse {
+    optional Header Header = 1;
+    repeated SetPair Pairs = 2;
+
+    optional ServiceError Error = 3;
+    optional string ErrorMsg = 4;
+}
+
+enum ServiceError {
+    SERVICE_ERROR_NONE = 0;
+    SERVICE_ERROR_UNSPECIFIED = 1;
+    SERVICE_ERROR_NO_RESPONSE = 2;
+    SERVICE_ERROR_TIMEOUT = 3;
+
+    SERVICE_ERROR_ACCESS_DENIED = 7;
+}
+
+enum GetError {
+    GET_ERROR_NONE = 0;
+    GET_ERROR_UNSPECIFIED = 1;
+    GET_ERROR_KEY_DOES_NOT_EXIST = 2;
+    GET_ERROR_TIMEOUT = 3;
+    GET_ERROR_COULD_NOT_RESOLVE_DRIVER = 4;
+    GET_ERROR_COULD_NOT_RESOLVE_ADDR = 5;
+    GET_ERROR_COULD_NOT_RESOLVE_XREF = 6;
+    GET_ERROR_ACCESS_DENIED = 7;
+}
+           
+// the DeviceControl service provides the fundamental driver functionality for
+// Setting and Getting values from devices independent of the underlying protocol.
+service DeviceControl {
+    // get a value from a driver
+    rpc Get(GetRequest) returns (GetResponse);
+    
+    // set a value on a driver
+    rpc Set(SetRequest) returns (SetResponse);
+}
+
+enum SetError {
+    SET_ERROR_NONE = 0;
+    SET_ERROR_UNSPECIFIED = 1;
+    SET_ERROR_KEY_DOES_NOT_EXIST = 2;
+    SET_ERROR_TIMEOUT = 3;
+    SET_ERROR_COULD_NOT_RESOLVE_DRIVER = 4;
+    SET_ERROR_COULD_NOT_RESOLVE_ADDR = 5;
+    SET_ERROR_COULD_NOT_RESOLVE_XREF = 6;
+    SET_ERROR_ACCESS_DENIED = 7;
+    SET_ERROR_READ_ONLY = 8;
+    SET_ERROR_INVALID_VALUE_TYPE = 9;
+}
+
+message BasicQueryRequest {
+    optional Header Header = 1;
+
+    string Query = 2;
+}
+
+message BasicQueryResponse {
+    optional Header Header = 1;
+    optional string Query = 2; // should this be optional?
+
+    repeated Triple Results = 3;    
+
+    optional QueryError Error = 4;
+    optional string ErrorMsg = 5;
+}
+
+// the sysmod service
+message DeviceQueryRequest {
+    optional Header Header = 1;
+
+    // TODO: support arbitrary queries returning devices
+    optional string Query = 2;
+
+    repeated string Names = 3;
+    repeated string Types = 4;
+    repeated string Locations = 5;
+
+    repeated string ChildTypes = 6;
+}
+
+message PointQueryRequest {
+    optional Header Header = 1;
+
+    optional string Query = 2;
+
+    optional string Device = 3; // "5", "dev:5", "bos://localhost/bos/dev/5"
+    repeated string Names = 4;
+    repeated string Types = 5;
+    repeated string Locations = 6;
+    optional bool ConsiderDeviceLoc = 7; 
+    optional Dtype Resource = 8; // 30, 40 or 48
+
+    repeated string ParentTypes = 9;
+
+    optional QueryError Error = 11;
+    optional string ErrorMsg = 12;
+}
+
+message QueryResponse {
+    optional Header Header = 1;
+    optional string Query = 2; // should this be optional?
+    repeated string Values = 3;
+    optional Dtype Dtype = 4;
+    optional QueryError Error = 5;
+    optional string ErrorMsg = 6;
+}
+
+// in general at least 1 field must be used
+message Triple {
+    optional string Subject = 1;
+    optional string Predicate = 2;
+    optional string Object = 3;
+}
+
+message MakeDeviceRequest {
+    string Name = 1;
+    
+    repeated string Types = 2; 
+    repeated string Locations = 3;
+    
+    optional string Driver = 4;
+
+    repeated Triple OtherProperties = 10;
+}
+
+message MakePointRequest {
+    string Device = 1;
+    string Name = 2;
+    
+    repeated string Types = 3;
+    repeated string Locations = 4;
+
+    optional string Xref = 5;
+
+    repeated Triple OtherProperties = 10;
+}
+
+message MakeDriverRequest {
+    string Name = 1;
+    string Host = 2;
+    string Port = 3;
+    string Image = 4;
+    string Container = 5;
+}
+
+message MakeResponse {
+    string Url = 1;
+    optional string ErrorMsg = 2;
+}
+
+message DeleteRequest {
+    optional Header Header = 1;
+
+    optional string Query = 2;
+    
+    optional Triple Triple = 3;
+}
+
+message DeleteResponse {
+    repeated string Urls = 1;
+}
+
+// the PointId (pid) service takes classes, names, or regexes
+service Sysmod {
+    // sysmod querying rpcs
+    rpc QueryDevices(DeviceQueryRequest) returns (QueryResponse);
+    rpc QueryPoints(PointQueryRequest) returns (QueryResponse);
+
+    rpc BasicQuery(BasicQueryRequest) returns (BasicQueryResponse);
+
+    // rpc NameToPoint(GetRequest) returns (QueryResponse);
+    rpc GetName(GetRequest) returns (QueryResponse);
+    rpc GetDriver(GetRequest) returns(QueryResponse);
+    rpc GetDriverXref(GetRequest) returns(QueryResponse);
+
+    // sysmod populating rpcs
+    rpc MakeDevice(MakeDeviceRequest) returns (MakeResponse);
+    rpc MakePoint(MakePointRequest) returns (MakeResponse);
+    rpc MakeDriver(MakeDriverRequest) returns (MakeResponse);
+
+    rpc Delete(DeleteRequest) returns (DeleteResponse);
+}
+
+enum QueryError {
+    QUERY_ERROR_NONE = 0;
+    QUERY_ERROR_UNSPECIFIED = 1;
+    // GET_ERROR_KEY_DOES_NOT_EXIST = 2;
+    QUERY_ERROR_TIMEOUT = 3;
+    QUERY_ERROR_UNKNOWN_PREFIX = 4;
+    QUERY_ERROR_ACCESS_DENIED = 5;
+}                
+                
+// Values are returned as strings. Dtype is used to decode to data types.
+enum Dtype {
+    UNSPECIFIED = 0;
+    
+    NULL = 1;
+
+    DOUBLE = 10; // float64
+    FLOAT = 11;  // float32
+    INT32 = 12;  // int32
+    INT64 = 13;  // int64
+    UINT32 = 14;
+    UINT64 = 15;
+    SINT32 = 16;
+    SINT64 = 17;
+    FIXED32 = 18;
+    FIXED64 = 19;
+    SFIXED32 = 20;
+    SFIXED64 = 21;
+    BOOL = 22;
+    STRING = 23;
+    BYTES = 24;
+
+    // sysmod response types
+    POINT = 30; // e.g., "bos://localhost/bos/dev/5/pts/1"
+    POINT_LIST = 31; // e.g., "bos://localhost/bos/dev/5/pts/1 bos://localhost/bos/dev/6/pts/1"
+
+    DEVICE = 40;
+    DEVICE_LIST = 41;
+
+    DRIVER = 48;
+    DRIVER_XREF = 49;
+}
+
+service HealthCheck {
+    rpc Ping(Empty) returns (Empty);
+}
+
+message HistoryRequest {
+    string Start = 1;
+    string End = 2;
+    repeated string Keys = 3;
+    optional int32 Limit = 4;
+}
+
+message HisRow {
+    string Timestamp = 1;
+    float Value = 2;
+    string Id = 3;
+}
+
+message HistoryResponse {
+    Header Header = 1;
+    repeated HisRow Rows = 2;
+    ServiceError Error = 3;
+}
+
+message RefreshRatesRequest {}
+message RefreshRatesResponse {
+    ServiceError Error = 1;
+    string ErrorMsg = 2;
+}
+
+service History {
+    // returns rows of history from the historian
+    rpc GetHistory(HistoryRequest) returns (HistoryResponse);
+    // set the sample rate of a given point
+    rpc GetSampleRate(SetRequest) returns (SetResponse);
+    // set the sample rate of a given point
+    rpc SetSampleRate(SetRequest) returns (SetResponse);
+    // remotely trigger an update of the rates used by the historian.
+    // this may be removed in future updates and its functionality triggered
+    // by SetSampleRate.
+    rpc RefreshRates(RefreshRatesRequest) returns(RefreshRatesResponse);
+}
+
+service Forecast {
+    // returns 
+    rpc Get(GetForecastRequest) returns (GetForecastResponse);
+
+    rpc Set(SetForecastRequest) returns (SetForecastResponse);
+}
+
+message SetForecastRequest {
+    Header header = 1;
+    ForecastEntry forecast = 2;
+}
+
+message SetForecastResponse {
+    Header header = 1;
+    string id = 2; // a uuid assigned by the server
+}
+
+message GetForecastRequest {
+    Header header = 1;
+    string forecast_id = 2;
+    string point_uri = 3;
+
+    google.protobuf.Timestamp start = 4;
+    google.protobuf.Timestamp end = 5;    
+
+    // TODO: think of example of forecast selection criteria. Starting with latest
+    // other examples: nearest to timestamp, previous_N, highest_confidence 
+}
+
+message GetForecastResponse {
+    Header header = 1;
+    repeated ForecastEntry forecasts = 2;
+}
+
+message ForecastEntry {
+    // if not provided defaults to server time
+    optional string forecast_id = 1; // only for responses
+    optional google.protobuf.Timestamp created_at = 2; 
+    string point_uri = 3;
+    optional string forecast_type = 4; // could be uri
+    string model = 5;
+    string model_version = 6;
+    optional google.protobuf.Struct metadata = 7;
+    repeated ForecastValue values = 8;
+}
+
+message ForecastValue {
+    string forecast_id = 1;
+    google.protobuf.Timestamp created_at = 2;
+    google.protobuf.Timestamp target_time = 3;
+    string scenario = 4;
+    double value = 5;
+}
+
+
+message RunRequest {
+    optional Header Header = 1;
+    string Image = 3;
+    optional string Container = 4;
+    repeated string Args = 5;
+    map <string, string> Kwargs = 6;
+    map <string, string> EnvVars = 7;
+    optional int64 Timeout = 8; // none < 0; default == 0 ; seconds > 0
+}
+
+message RunResponse {
+    Header Header = 1;
+    int32 ExitCode = 2;
+    optional string StdOut = 3;
+    optional string ErrorMsg= 4;
+
+    repeated string ReturnValues = 5; // may be none
+}
+
+message RegisterIntervalRequest {
+    Header Header = 1;
+    uint32 Interval = 2; // run every <Interval> seconds
+    repeated RunRequest Requests = 3; // an ordered list of RunRequests
+    optional bool RunNow = 4;
+}
+
+// the scheduler will create the containers but not necessarily start them
+message RegisterIntervalReponse {
+    Header Header = 1;
+    uint32 IntervalId = 2;
+    repeated string ContainerIds = 3; // 12 character truncated docker ids
+}
+
+// 
+message CronRequest {
+    Header Header = 1;
+    string CronStr = 2;
+    repeated RunRequest Requests = 3;
+    bool OnStart = 4;
+}
+
+message CronResponse {
+    Header Header = 1;
+    bool Ok = 2;
+}
+
+message RegisterHandlerRequest {
+    Header Header = 1;
+    string Event = 2; // instance of a particular topic
+    repeated RunRequest Requests = 3;
+}
+
+message RegisterHandlerResponse {
+    Header Header = 1;
+    bool Ok = 2;
+}
+
+message UnregisterHandlerRequest {
+    Header Header = 1;
+    string Event = 2; // instance of a particular topic
+    repeated RunRequest Requests = 3;
+}
+
+message UnregisterHandlerResponse {
+    Header Header = 1;
+    bool Ok = 2;
+}
+
+service Scheduler {
+    // when called against the Schedule service writes to Redis
+    rpc Get(GetRequest) returns(GetResponse);
+
+    // when called against the Schedule service writes to Redis
+    rpc Set(SetRequest) returns(SetResponse);
+
+    // run an image 1 time
+    rpc Run(RunRequest) returns(RunResponse);
+
+    // scheule an rpc to run periodicially
+    rpc RegisterInterval(RegisterIntervalRequest) returns(RegisterIntervalReponse);
+
+    // schedule a cron job
+    rpc RegisterCron(CronRequest) returns(CronResponse);
+
+    // bind the container that will be called when an event occurs
+    rpc RegisterHandler(RegisterHandlerRequest) returns(RegisterHandlerResponse);
+    rpc UnregisterHandler(UnregisterHandlerRequest) returns(UnregisterHandlerResponse);
+}
+
+service Events {
+    // the SetRequests are TOPIC: MSG
+    rpc Set(SetRequest) returns(SetResponse);
+}

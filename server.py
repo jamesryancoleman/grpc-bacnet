@@ -22,6 +22,7 @@ from bacpypes3.json.util import (
 )
 
 from concurrent import futures
+from zoneinfo import ZoneInfo
 import datetime as dt
 import logging
 import sys
@@ -30,10 +31,12 @@ from argparse import Namespace
 import parse
 
 import grpc
-import comms_pb2
-import comms_pb2_grpc
+import common_pb2
+import common_pb2_grpc
 
 from typing import Callable, Any
+
+_local_tz = ZoneInfo("America/New_York")
 
 # some debugging
 _debug = 0
@@ -243,15 +246,15 @@ async def WriteProperty(device_address:str, object_identifier:str, property_id:s
 
 
 # the gRPC server implementation
-class BACnetRPCServer(comms_pb2_grpc.GetSetRunServicer):
-    def Get(self, request:comms_pb2.GetRequest, context):
+class BACnetRPCServer(common_pb2_grpc.DeviceControlServicer):
+    def Get(self, request:common_pb2.GetRequest, context):
         # print("globals:")
         # for k, v in globals().items():
         #     print(k,": ", v, sep="")
         if _debug:
             _log.debug("get_request:\n%r", request)
         # print("received Get request:\n", request, sep="")
-        header = comms_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
+        header = common_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
         
         # fetch the (id, BacnetPtParams) tuples from the sysmod service
         pairs = []
@@ -275,23 +278,25 @@ class BACnetRPCServer(comms_pb2_grpc.GetSetRunServicer):
         ))
         
         # copy results to the response format
-        results:list[comms_pb2.GetPair] = []
+        results:list[common_pb2.GetPair] = []
+        
         for k, v in unordered_results.items():
-            results.append(comms_pb2.GetPair(
+            results.append(common_pb2.GetPair(
                 Key=k,
                 Value=str(v),
+                time=dt.datetime.now(_local_tz),
                 # TODO Dtype=[something] ,
             ))
-        return comms_pb2.GetResponse(
+        return common_pb2.GetResponse(
             Header=header,
             Pairs=results,
         )
     
-    def Set(self, request:comms_pb2.SetRequest, context) -> comms_pb2.SetResponse:
+    def Set(self, request:common_pb2.SetRequest, context) -> common_pb2.SetResponse:
         print("set request received: ", request)
-        header = comms_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
+        header = common_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
 
-        results:list[comms_pb2.SetPair] = []
+        results:list[common_pb2.SetPair] = []
         for pair in request.Pairs:
             params = parse.ParseBacnetPtKey(pair.Key)
             ok = asyncio.run(WriteProperty(params.address,
@@ -303,7 +308,7 @@ class BACnetRPCServer(comms_pb2_grpc.GetSetRunServicer):
             results.append(pair)
             print("{} <- {} (ok={})".format(pair.Key, pair.Value, pair.Ok)) 
 
-        return comms_pb2.SetResponse(
+        return common_pb2.SetResponse(
             Header=header,
             Pairs=results,
         )   
@@ -332,7 +337,7 @@ async def serve(port:str=SERVER_PORT) -> None:
 
     # GRPC set up
     server = grpc.aio.server()
-    comms_pb2_grpc.add_GetSetRunServicer_to_server(BACnetRPCServer(), server)
+    common_pb2_grpc.add_DeviceControlServicer_to_server(BACnetRPCServer(), server)
     result = server.add_insecure_port("0.0.0.0:" + port)
     # print(result)
     _log.info("gRPC server started. Listening on port: %s", port)
