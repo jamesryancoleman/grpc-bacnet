@@ -26,6 +26,9 @@ class BACnetPtParams(object):
         # for future use
         self.kwargs = {}
         self.flags = []
+    
+    def __repr__(self):
+        return f"BACnetPtParams(host='{self.host}', port={self.port}, device_instance={self.device_instance}, object_identifier='{self.GetObjectId()}, property='{self.property}')"
 
     def Tidy(self):
         if (self.host != "") and (self.port != 47808):
