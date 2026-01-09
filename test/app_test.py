@@ -7,6 +7,8 @@ import asyncio
 import src.app
 import src.parse
 
+import random
+
 from bacpypes3.debugging import ModuleLogger
 from bacpypes3.settings import settings
 from bacpypes3.argparse import create_log_handlers
@@ -141,3 +143,58 @@ class TestReadPropertySequential((unittest.IsolatedAsyncioTestCase)):
             except Exception as e:
                 print(f"Error: {e}")
                 raise
+
+class TestWriteProperty((unittest.IsolatedAsyncioTestCase)):
+    async def asyncSetUp(self):
+        # these addresses must be live and on your network
+        self.test_file_path = _sample_xref_file
+
+        with open(self.test_file_path, 'r') as file:
+            self.test_keys = [line.strip() for line in file.readlines()]
+        print() 
+
+        # load args from config file
+        args = src.app.load_ini_args(_app_config_file, debug_modules=["src.app", __name__, "bacpypes3.app.Application"], color=True)
+
+        # create the singleton app instance
+        await src.app.BACnetClient.create(args)
+        self.client = src.app.BACnetClient.get()
+
+        if src.app._debug:
+            src.app._log.debug("args: %r", args)
+            src.app._log.debug("settings: %r", settings)
+            src.app._log.debug("app: %r", self.client)
+
+    async def asyncTearDown(cls):
+        if src.app.BACnetClient._instance:
+            # Close synchronously since tearDownClass isn't async
+            src.app.BACnetClient._instance._app.close()
+            src.app.BACnetClient._instance = None
+
+    async def test_write_property(self):
+        # a temp set point key
+        params = src.parse.ParseBacnetPtKey(self.test_keys[2])
+        try:
+            # check the current value
+            setpoint = await self.client.read_property(device_addr=params.address, object_id=params.GetObjectId(), property_id=params.property)
+            setpoint = float(setpoint)
+            print("value_at_t0:", setpoint)
+
+            # walk up or down
+            if random.randint(0, 1):
+                setpoint += 1
+            else:
+                setpoint -= 1
+
+            # try to write new value to the setpoint
+            resp = await self.client.write_property(params.address, params.GetObjectId(), params.property, setpoint)
+            print(f"write_resp: {repr(resp)}")
+
+            # check the current value
+            setpoint = await self.client.read_property(device_addr=params.address, object_id=params.GetObjectId(), property_id=params.property)
+            setpoint = float(setpoint)
+            print("value_at_t1:", setpoint)
+
+        except Exception as e:
+            print(f"Error: {e}")
+            raise

@@ -31,9 +31,9 @@ import sys
 from argparse import Namespace
 
 import grpc
-from src import parse
-from src import common_pb2
-from src import common_pb2_grpc
+from . import parse
+from . import common_pb2
+from . import common_pb2_grpc
 
 from typing import Callable, Any
 
@@ -62,94 +62,11 @@ MASK:str = "24"
 
 SERVER_PORT:str = "50062"     # e.g., 50062
 
-async def ReadProperty(device_addr:str, object_id:str, property_id:str) -> str:         
-    try:
-        client = app.BACnetClient.get()
-        response = await client.read_property(device_addr, object_id, property_id)
-        if _debug:
-                _log.debug("    - response: %r", response)
-        print("present value:", response)
-    except Exception as e:
-        print(f"Error: {e}")
-        raise
-    if response is not None:
-        return(str(response)) # str | None
-    else:
-        return(None)
-
-
-async def WriteProperty(device_address:str, object_identifier:str, property_id:str,  
-                        value:str=None, priority=None, array_index=None):
-    """ Should the default priority be 16? (or maybe that's 15?)
-    """
-    app = None # clear the app out
-    try:
-        if _debug:
-            _log.debug("args: %r", args)
-        if app is None:
-            # build an application
-            app = Application.from_args(args)
-
-            # parse = SimpleArgumentParser()
-            # parse.expand_args(args) # this should set debugging to True and add color
-
-        # interpret the address
-        device_address = Address(device_address)
-        if _debug:
-            _log.debug("device_address: %r", device_address)
-
-        # interpret the object indentifier
-        object_identifier = ObjectIdentifier(object_identifier)
-        if _debug:
-            _log.debug("object_identifier: %r", object_identifier)
-
-        # split the property identifier and its index
-        property_index_match = property_index_re.match(property_id)
-        if not property_index_match:
-            raise ValueError("property specification incorrect")
-        property_identifier, property_array_index = property_index_match.groups()
-        if property_identifier.isdigit():
-            property_identifier = int(property_identifier)
-        if property_array_index is not None:
-            property_array_index = int(property_array_index)
-
-        # check if caller wants a specific priority
-        if priority:
-            if (priority < 1) or (priority > 16):
-                raise ValueError(f"set error: priority {priority}")
-        if _debug:
-            _log.debug("priority: %r", priority)
-
-        try:
-            response = await app.write_property(
-                device_address,
-                object_identifier,
-                property_id,
-                value,
-                array_index,
-                priority,
-            )
-            if _debug:
-                _log.debug("response: %r", response)
-            # print(response)
-            if response is None:
-                return True
-        except ErrorRejectAbortNack as err:
-            if _debug:
-                _log.debug("    - exception: %r", err)
-            response = err
-            return False
-    finally:
-        if app:
-            app.close()
-
-
 # the gRPC server implementation
 class BACnetRPCServer(common_pb2_grpc.DeviceControlServicer):
     async def Get(self, request:common_pb2.GetRequest, context):
         if _debug:
-            _log.debug("get_request:\n%r", request)
-        # print("received Get request:\n", request, sep="")
+            _log.debug("get_request received")
         header = common_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
         bacnet_client = app.BACnetClient.get()
         results = {}
@@ -182,21 +99,25 @@ class BACnetRPCServer(common_pb2_grpc.DeviceControlServicer):
             Pairs=pairs,
         )
     
-    def Set(self, request:common_pb2.SetRequest, context) -> common_pb2.SetResponse:
-        print("set request received: ", request)
+    async def Set(self, request:common_pb2.SetRequest, context) -> common_pb2.SetResponse:
+        if _debug:
+            _log.debug("set_request received")
         header = common_pb2.Header(Src=request.Header.Dst, Dst=request.Header.Src)
 
+        bacnet_client = app.BACnetClient.get()
         results:list[common_pb2.SetPair] = []
         for pair in request.Pairs:
             params = parse.ParseBacnetPtKey(pair.Key)
-            ok = asyncio.run(WriteProperty(params.address,
-                                                params.GetObjectId(),
-                                                params.property,
-                                                pair.Value))
-            if ok:
+            resp = await bacnet_client.write_property(
+                params.address,
+                params.GetObjectId(),
+                params.property,
+                pair.Value,
+            )
+            if resp is None:
                 pair.Ok = True
-            results.append(pair)
-            print("{} <- {} (ok={})".format(pair.Key, pair.Value, pair.Ok)) 
+                results.append(pair)
+                print("{} <- {} (ok={})".format(pair.Key, pair.Value, pair.Ok)) 
 
         return common_pb2.SetResponse(
             Header=header,

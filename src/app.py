@@ -77,12 +77,7 @@ class BACnetClient:
             raise RuntimeError("BACnetClient not initialized - call create() first")
         return cls._instance
     
-    async def read_property(
-        self, 
-        device_addr: str, 
-        object_id: str, 
-        property_id: str
-    ) -> str:
+    async def read_property(self, device_addr: str, object_id: str, property_id: str) -> str:
         async with self._semaphore:
             device_address = Address(device_addr)
             object_identifier = ObjectIdentifier(object_id)
@@ -113,6 +108,49 @@ class BACnetClient:
                 response = response.get_value()
             
             return str(response)
+    
+    async def write_property(
+            self, device_addr:str,
+            object_id:str, 
+            property_id:str,
+            value,
+            priority=None,
+            array_index=None):
+        async with self._semaphore:
+            device_addr = Address(device_addr)
+            object_id = ObjectIdentifier(object_id)
+
+            # split the property identifier and its index
+            property_index_match = property_index_re.match(property_id)
+            if not property_index_match:
+                raise ValueError("property specification incorrect")
+            property_id, property_array_index = property_index_match.groups()
+            if property_id.isdigit():
+                property_id = int(property_id)
+            if property_array_index is not None:
+                property_array_index = int(property_array_index)
+
+            # check if caller wants a specific priority
+            if priority:
+                if (priority < 1) or (priority > 16):
+                    raise ValueError(f"set error: priority {priority}")
+        if _debug:
+            _log.debug("priority: %r", priority)
+            try:
+                resp = await self._app.write_property(
+                    device_addr,
+                    object_id,
+                    property_id,
+                    value,
+                    array_index,
+                    priority,
+                )
+                if _debug:
+                    _log.debug("write_resp: %r", resp)
+            except ErrorRejectAbortNack as err:
+                if _debug:
+                    _log.debug("    - exception: %r", err)
+                return str(err)
     
     async def close(self):
         """Call only at shutdown."""
