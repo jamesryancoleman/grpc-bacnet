@@ -107,7 +107,7 @@ class BACnetClient:
             if isinstance(response, AnyAtomic):
                 response = response.get_value()
             
-            return str(response)
+            return response
     
     async def write_property(
             self, device_addr:str,

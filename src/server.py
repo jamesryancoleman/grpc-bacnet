@@ -13,7 +13,7 @@ from bacpypes3.app import Application
 from bacpypes3.settings import settings
 
 from bacpypes3.pdu import Address
-from bacpypes3.primitivedata import Atomic, ObjectIdentifier
+from bacpypes3.primitivedata import Atomic, ObjectIdentifier, Real
 from bacpypes3.constructeddata import Sequence,AnyAtomic, Array, List
 from bacpypes3.apdu import ErrorRejectAbortNack
 from bacpypes3.json.util import (
@@ -88,11 +88,19 @@ class BACnetRPCServer(common_pb2_grpc.DeviceControlServicer):
         # copy results to the response format
         pairs:list[common_pb2.GetPair] = []
         for k, v in results.items():
+            # print(f'the type of {k} is {type(v)} ({v})')
+            # if isinstance(v, int):
+            #     _dtype = common_pb2.INT64
+            if isinstance(v, Real):
+                _dtype = common_pb2.DOUBLE
+            else:
+                 _dtype = common_pb2.STRING
+
             pairs.append(common_pb2.GetPair(
                 Key=k,
                 Value=str(v),
                 time=dt.datetime.now(_local_tz),
-                # TODO Dtype=[something] ,
+                Dtype=_dtype
             ))
         return common_pb2.GetResponse(
             Header=header,
