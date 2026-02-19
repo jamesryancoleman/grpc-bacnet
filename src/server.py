@@ -31,13 +31,14 @@ import sys
 from argparse import Namespace
 
 import grpc
-from . import parse
-from . import common_pb2
-from . import common_pb2_grpc
+import src.parse as parse
+import src.common_pb2 as common_pb2
+import src.common_pb2_grpc as common_pb2_grpc
 
 from typing import Callable, Any
 
 import src.app as app
+# import app
 
 _local_tz = ZoneInfo("America/New_York")
 _app_config_file = "test/bacpypes3_config.ini"

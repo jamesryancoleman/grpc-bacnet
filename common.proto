@@ -18,8 +18,11 @@ message Header {
 
     uint64 TxnId = 3;
     string SessionToken = 4;
-
+    
     google.protobuf.Timestamp Time = 5;
+    
+    optional string app = 6; // field for app to self-attest its name
+    optional string user = 7;
 }
 
 // GetPairs are returned by services when get requests are made
@@ -396,31 +399,33 @@ message RunRequest {
     repeated string Args = 5;
     map <string, string> Kwargs = 6;
     map <string, string> EnvVars = 7;
-    optional int64 Timeout = 8; // none < 0; default == 0 ; seconds > 0
+    int64 Timeout = 8; // none < 0; default == 0 ; seconds > 0
 }
 
 message RunResponse {
     Header Header = 1;
-    int32 ExitCode = 2;
-    optional string StdOut = 3;
-    optional string ErrorMsg= 4;
+    uint64 txn = 2;
+    string container_id = 3;
+    int32 ExitCode = 4;
+    optional string StdOut = 5;
+    optional string ErrorMsg= 6;
 
-    repeated string ReturnValues = 5; // may be none
+    repeated string ReturnValues = 7; // may be none
 }
 
-message RegisterIntervalRequest {
-    Header Header = 1;
-    uint32 Interval = 2; // run every <Interval> seconds
-    repeated RunRequest Requests = 3; // an ordered list of RunRequests
-    optional bool RunNow = 4;
-}
+// message RegisterIntervalRequest {
+//     Header Header = 1;
+//     uint32 Interval = 2; // run every <Interval> seconds
+//     repeated RunRequest Requests = 3; // an ordered list of RunRequests
+//     optional bool RunNow = 4;
+// }
 
-// the scheduler will create the containers but not necessarily start them
-message RegisterIntervalReponse {
-    Header Header = 1;
-    uint32 IntervalId = 2;
-    repeated string ContainerIds = 3; // 12 character truncated docker ids
-}
+// // the scheduler will create the containers but not necessarily start them
+// message RegisterIntervalReponse {
+//     Header Header = 1;
+//     uint32 IntervalId = 2;
+//     repeated string ContainerIds = 3; // 12 character truncated docker ids
+// }
 
 // 
 message CronRequest {
@@ -431,13 +436,14 @@ message CronRequest {
 }
 
 message CronResponse {
-    Header Header = 1;
-    bool Ok = 2;
+    Header header = 1;
+    bool ok = 2;
+    string uuid = 3;
 }
 
 message RegisterHandlerRequest {
     Header Header = 1;
-    string Event = 2; // instance of a particular topic
+    string Event = 2; // a particular topic
     repeated RunRequest Requests = 3;
 }
 
@@ -446,9 +452,18 @@ message RegisterHandlerResponse {
     bool Ok = 2;
 }
 
+message EventHandlersRequest {
+    Header header = 1;
+}
+
+message EventHandlersResponse {
+    Header header = 1;
+
+}
+
 message UnregisterHandlerRequest {
     Header Header = 1;
-    string Event = 2; // instance of a particular topic
+    string Event = 2; // a particular topic
     repeated RunRequest Requests = 3;
 }
 
@@ -457,28 +472,174 @@ message UnregisterHandlerResponse {
     bool Ok = 2;
 }
 
-service Scheduler {
-    // when called against the Schedule service writes to Redis
-    rpc Get(GetRequest) returns(GetResponse);
+message RunningJobsRequest {
+    Header Header = 1;
+    repeated uint64 Txns = 2; // optional
+}
 
-    // when called against the Schedule service writes to Redis
+message RunningJobsResponse {
+    Header Header = 1;
+    repeated JobData jobs = 2;
+}
+
+enum AppStatus {
+    STATUS_UNKNOWN = 0;
+    STATUS_STOPPED = 1;
+    STATUS_STOPPING = 2;
+    STATUS_SCHEDULED = 3;
+    STATUS_RUNNING = 4;
+}
+
+message JobData {
+    string name = 1;
+    uint64 txn = 2;
+    string id = 3; // to track the container
+    string user = 4;
+    string run_on = 5;
+    google.protobuf.Timestamp created = 6;
+    google.protobuf.Timestamp next = 7;
+    google.protobuf.Timestamp previous = 8;
+    AppStatus status = 9;
+    
+}
+
+message StopRequest {
+    Header header = 1;
+    repeated uint64 txns = 2; 
+    repeated string ids = 3; // the container id
+}
+
+message StopResponse {
+    Header header = 1;
+}
+
+
+message CronTableResponse {
+    Header header = 1;
+    repeated JobData jobs = 2;
+}
+
+message UnregisterCronRequest {
+    Header header = 1;
+    string uuid = 2; // the cron uuid
+}
+
+message UnregisterCronResponse {
+    Header header = 1;
+    bool ok = 2;
+}
+
+message LibraryRequest {
+    Header header = 1;
+}
+
+message LibraryResponse {
+    Header header = 1;
+    repeated AppDesciption apps = 2;
+}
+
+message AppDesciption {
+    string image = 1;
+    string description = 2;
+    string usage = 3;
+    // google.protobuf.Timestamp last_update = 2;
+
+}
+
+service Scheduler {
+    rpc Get(GetRequest) returns(GetResponse);
     rpc Set(SetRequest) returns(SetResponse);
+
+    rpc Library(LibraryRequest) returns(LibraryResponse);
 
     // run an image 1 time
     rpc Run(RunRequest) returns(RunResponse);
+    rpc RunningJobs(RunningJobsRequest) returns(RunningJobsResponse);
+    rpc Stop(StopRequest) returns(StopResponse);
 
     // scheule an rpc to run periodicially
-    rpc RegisterInterval(RegisterIntervalRequest) returns(RegisterIntervalReponse);
+    // rpc RegisterInterval(RegisterIntervalRequest) returns(RegisterIntervalReponse);
 
     // schedule a cron job
     rpc RegisterCron(CronRequest) returns(CronResponse);
+    rpc CronTable(RunningJobsRequest) returns(RunningJobsResponse);
+    rpc UnregisterCron(UnregisterCronRequest) returns(UnregisterCronResponse);
 
     // bind the container that will be called when an event occurs
     rpc RegisterHandler(RegisterHandlerRequest) returns(RegisterHandlerResponse);
+    rpc EventHandlers(EventHandlersRequest) returns(EventHandlersResponse);
     rpc UnregisterHandler(UnregisterHandlerRequest) returns(UnregisterHandlerResponse);
 }
 
-service Events {
-    // the SetRequests are TOPIC: MSG
-    rpc Set(SetRequest) returns(SetResponse);
+// service Events {
+//     // the SetRequests are TOPIC: MSG
+//     rpc Publish(PublishRequest) returns(PublishResponse);
+//     rpc Subscribe(SubscribeRequest) returns (stream Event);
+// }
+
+
+service EventBus {
+  rpc Publish(PublishRequest) returns (PublishResponse);
+  rpc Subscribe(SubscribeRequest) returns (stream Event);
+  rpc Replay(ReplayRequest) returns (stream Event);
+}
+
+
+message Event {
+  string id                          = 1;  // UUID, assigned by the gateway
+  string topic                       = 2;  // e.g. "alarms", "setpoints", "telemetry"
+  string source                      = 3;  // container/app that produced it
+  string type                        = 4;  // event classification, e.g. "alarm.high_zone_temp"
+  google.protobuf.Timestamp timestamp = 5;
+  bytes payload                      = 6;  // actual data — opaque to the bus
+  string payload_content_type        = 7;  // "application/json", "application/protobuf", etc.
+  map<string, string> metadata       = 8;  // freeform k/v for routing, filtering, tracing
+  int64 offset                       = 9;  // Kafka offset, populated on delivery not publish
+}
+
+
+message PublishRequest {
+  string topic                       = 1;
+  string type                        = 2;
+  bytes payload                      = 3;
+  string payload_content_type        = 4;
+  map<string, string> metadata       = 5;
+  string partition_key               = 6;  // controls Kafka partitioning — e.g. device ID
+                                           // ensures ordering per-device
+}
+
+message PublishResponse {
+  string event_id                    = 1;  // the UUID the gateway assigned
+  int64 offset                       = 2;  // Kafka offset for confirmation
+  google.protobuf.Timestamp accepted_at = 3;
+}
+
+message SubscribeRequest {
+  repeated string topics             = 1;  // subscribe to multiple topics at once
+  string consumer_id                 = 2;  // maps to Kafka consumer group
+  repeated Filter filters            = 3;  // optional server-side filtering
+  StartPosition start                = 4;  // where to begin consuming
+}
+
+message Filter {
+  string field                       = 1;  // "type", "source", or a metadata key
+  string pattern                     = 2;  // exact match or glob, e.g. "alarm.*"
+}
+
+enum StartPosition {
+  LATEST = 0;                              // new events only (default)
+  EARLIEST = 1;                            // from beginning of retention
+  AT_TIMESTAMP = 2;                        // use replay_from_timestamp
+  AT_OFFSET = 3;                           // use replay_from_offset
+}
+
+message ReplayRequest {
+  string topic                       = 1;  // single topic for replay
+  oneof start_from {
+    google.protobuf.Timestamp from_timestamp = 2;
+    int64 from_offset                = 3;
+    string from_event_id             = 4;  // gateway resolves to offset
+  }
+  google.protobuf.Timestamp until    = 5;  // optional end bound, omit for open-ended
+  repeated Filter filters            = 6;
 }
